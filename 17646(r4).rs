@@ -1,15 +1,14 @@
-// 아직 미완성
-// input : 658146524385565391  --> overflow
+// 아니 u128, i128이 있는지 몰랐지!!!
+// 그런데도 아직 런타임 에러?
+
 use std::collections::HashMap;
 use std::io::{Result, Write, stdin, stdout};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const P: u64 = 998244353;
+struct RandGenerator(u128);
 
-struct RandGenerator(u64);
-
-impl From<u64> for RandGenerator {
-    fn from(seed: u64) -> Self {
+impl From<u128> for RandGenerator {
+    fn from(seed: u128) -> Self {
         RandGenerator(seed)
     }
 }
@@ -19,12 +18,12 @@ impl RandGenerator {
         let seed = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("can't get current time")
-            .as_nanos() as u64;
+            .as_nanos();
 
         RandGenerator(seed)
     }
 
-    fn next(&mut self) -> u64 {
+    fn next(&mut self) -> u128 {
         let mut x = self.0;
         x ^= x << 13;
         x ^= x >> 7;
@@ -38,7 +37,7 @@ impl RandGenerator {
             panic!("min must be less than max");
         }
 
-        let range = (max - min + 1) as u64;
+        let range = (max - min + 1) as u128;
         let random_value = self.next() % range;
 
         min + random_value as u32
@@ -48,21 +47,21 @@ impl RandGenerator {
 static mut RNG: RandGenerator = RandGenerator(0);
 
 #[allow(static_mut_refs)]
-fn randint(min: u64, max: u64) -> u64 {
+fn randint(min: u128, max: u128) -> u128 {
     unsafe {
         let min_high = (min >> 32) as u32;
         let min_low = (min & 0x00000000FFFFFFFF) as u32;
         let max_high = (max >> 32) as u32;
         let max_low = (max & 0x00000000FFFFFFFF) as u32;
 
-        let high = RNG.randint(min_high, max_high) as u64;
-        let low = RNG.randint(min_low, max_low) as u64;
+        let high = RNG.randint(min_high, max_high) as u128;
+        let low = RNG.randint(min_low, max_low) as u128;
 
         (high << 32) | low
     }
 }
 
-fn mod_pow(mut base: u64, mut exp: u64, modulus: u64) -> u64 {
+fn mod_pow(mut base: u128, mut exp: u128, modulus: u128) -> u128 {
     let mut result = 1;
     base %= modulus;
     while exp > 0 {
@@ -75,99 +74,12 @@ fn mod_pow(mut base: u64, mut exp: u64, modulus: u64) -> u64 {
     result
 }
 
-fn fft(a: &mut Vec<u64>, inv: bool) {
-    let n = a.len();
-    let mut j = 0;
-
-    for i in 1..n {
-        let mut rev = n / 2;
-        while j >= rev {
-            j -= rev;
-            rev /= 2
-        }
-        j += rev;
-        if i < j {
-            a.swap(i, j);
-        }
-    }
-
-    let mut step = 2;
-    while step <= n {
-        let half = step / 2;
-        let u = mod_pow(3, (P - 1) / step as u64, P);
-        let u = if inv { mod_pow(u, P - 2, P) } else { u };
-
-        for i in (0..n).step_by(step) {
-            let mut w = 1;
-            for j in i..i+half {
-                let v = a[j + half] * w % P;
-                a[j + half] = (a[j] - v + P) % P;
-                a[j] = (a[j] + v) % P;
-                w = w * u % P;
-            }
-        }
-        step *= 2;
-    }
-
-    if inv {
-        let num = mod_pow(n as u64, P - 2, P);
-        for i in 0..n {
-            a[i] = a[i] * num % P;
-        }
-    }
-}
-
-fn multiply(a: &[u64], b: &[u64]) -> String {
-    let mut n: u64 = 1;
-    let total_length: usize = a.len() + b.len();
-    while n < total_length as u64 {
-        n *= 2;
-    }
-
-    let mut a_reversed: Vec<u64> = a.iter().rev().cloned().collect();
-    a_reversed.resize(n as usize, 0);
-
-    let mut b_reversed: Vec<u64> = b.iter().rev().cloned().collect();
-    b_reversed.resize(n as usize, 0);
-
-    fft(&mut a_reversed, false);
-    fft(&mut b_reversed, false);
-
-    let mut c: Vec<u64> = vec![0; n as usize];
-    for i in 0..n as usize {
-        c[i] = (a_reversed[i] * b_reversed[i]) % P;
-    }
-
-    fft(&mut c, true);
-
-    let mut carry: u64 = 0;
-    for i in 0..c.len() {
-        carry += c[i];
-        c[i] = carry % 10;
-        carry /= 10;
-    }
-
-    while carry > 0 {
-        c.push(carry % 10);
-        carry /= 10;
-    }
-
-    let result: String = c.iter().rev().map(|&digit| digit.to_string()).collect();
-
-    let result = result.trim_start_matches('0');
-    if result.is_empty() {
-        "0".to_string()
-    } else {
-        result.to_string()
-    }
-}
-
-fn pow(base: u64, exp: u64) -> u64 {
-    mod_pow(base, exp, u64::MAX)
+fn pow(base: u128, exp: u128) -> u128 {
+    mod_pow(base, exp, u128::MAX)
 }
 
 
-fn is_prime(n: u64) -> bool {
+fn is_prime(n: u128) -> bool {
     let pil = vec![2, 3, 5, 7, 11, 13, 17, 19, 23];
 
     if n == 1 {
@@ -186,7 +98,7 @@ fn is_prime(n: u64) -> bool {
     true
 }
 
-fn millar_rabin(n: u64, k: u64) -> bool {
+fn millar_rabin(n: u128, k: u128) -> bool {
     if n == 2 {
         return true;
     }
@@ -195,7 +107,7 @@ fn millar_rabin(n: u64, k: u64) -> bool {
         return false;
     }
 
-    let mut s: u64 = 0;
+    let mut s: u128 = 0;
     let mut d = n - 1;
 
     while d % 2 == 0 {
@@ -227,14 +139,14 @@ fn millar_rabin(n: u64, k: u64) -> bool {
     true
 }
 
-fn gcd(a: i64, b: i64) -> i64 {
+fn gcd(a: i128, b: i128) -> i128 {
     if a == 0 {
         return b;
     }
     gcd(b % a, a)
 }
 
-fn pollard_rho(n: u64) -> u64 {
+fn pollard_rho(n: u128) -> u128 {
     if n % 2 == 0 {
         return 2;
     }
@@ -247,20 +159,17 @@ fn pollard_rho(n: u64) -> u64 {
         return 1;
     }
 
-    let mut x: u64 = randint(1, n - 1);
-    let mut y: u64 = x;
-    let c: u64 = randint(1, n - 1);
-    let mut g: u64 = 1;
+    let mut x: u128 = randint(1, n - 1);
+    let mut y: u128 = x;
+    let c: u128 = randint(1, n - 1);
+    let mut g: u128 = 1;
 
     while g == 1 {
         x = (mod_pow(x, 2, n) + c) % n;
         y = (mod_pow(y, 2, n) + c) % n;
         y = (mod_pow(y, 2, n) + c) % n;
-        
-//        x = ((x * x) % n + c) % n;
-//        y = ((y * y) % n + c) % n;
-//        y = ((y * y) % n + c) % n;
-        g = gcd((x as i64 - y as i64).abs(), n as i64) as u64;
+
+        g = gcd((x as i128 - y as i128).abs(), n as i128) as u128;
 
         if g == n {
             return pollard_rho(n);
@@ -270,7 +179,7 @@ fn pollard_rho(n: u64) -> u64 {
     if is_prime(g) { g } else { pollard_rho(g) }
 }
 
-fn prime_factors(mut n: u64) -> HashMap<u64, u64> {
+fn prime_factors(mut n: u128) -> HashMap<u128, u128> {
     if n == 1 {
         return HashMap::new();
     }
@@ -291,7 +200,7 @@ fn prime_factors(mut n: u64) -> HashMap<u64, u64> {
     factors
 }
 
-fn tonelli_shanks(n: u64, p: u64) -> Option<u64> {
+fn tonelli_shanks(n: u128, p: u128) -> Option<u128> {
     if mod_pow(n, (p - 1) / 2, p) != 1 {
         return None;
     }
@@ -317,7 +226,6 @@ fn tonelli_shanks(n: u64, p: u64) -> Option<u64> {
     let mut r = mod_pow(n, (q + 1) / 2, p);
     let mut t = mod_pow(n, q, p);
     let mut m = s;
-
     while t != 0 && t != 1 {
         let mut i = 0;
         let mut t2 = t;
@@ -328,20 +236,16 @@ fn tonelli_shanks(n: u64, p: u64) -> Option<u64> {
         }
 
         let b = mod_pow(c, 1 << (m - i - 1), p);
-        
-        r = multiply(&[r], &[b]).parse::<u64>().unwrap() % p;
-        c = multiply(&[b], &[b]).parse::<u64>().unwrap() % p;
-        t = multiply(&[t], &[c]).parse::<u64>().unwrap() % p;
-//        r = (r * b) % p;
-//        c = (b * b) % p;
-//        t = (t * c) % p;
+        r = (r * b) % p;
+        c = (b * b) % p;
+        t = (t * c) % p;
         m = i;
     }
 
     Some(r)
 }
 
-fn cornacchia(n: u64) -> u64 {
+fn cornacchia(n: u128) -> u128 {
     if n % 4 == 3 {
         return 0;
     }
@@ -368,14 +272,14 @@ fn cornacchia(n: u64) -> u64 {
     r1
 }
 
-fn multiply_pairs(p1: Vec<u64>, p2: Vec<u64>) -> Vec<u64> {
-    let (a, b) = (p1[0] as i64, p1[1] as i64);
-    let (c, d) = (p2[0] as i64, p2[1] as i64);
-    
-    vec![(a * c - b * d).abs() as u64, (a * d + b * c) as u64]
+fn multiply_pairs(p1: Vec<u128>, p2: Vec<u128>) -> Vec<u128> {
+    let (a, b) = (p1[0] as i128, p1[1] as i128);
+    let (c, d) = (p2[0] as i128, p2[1] as i128);
+
+    vec![(a * c - b * d).abs() as u128, (a * d + b * c) as u128]
 }
 
-fn count(mut n: u64) -> u64 {
+fn count(mut n: u128) -> u128 {
     while n % 4 == 0 {
         n /= 4;
     }
@@ -398,7 +302,7 @@ fn count(mut n: u64) -> u64 {
             }
         }
 
-        let sqrt = (n as f64).sqrt().floor() as u64;
+        let sqrt = (n as f64).sqrt().floor() as u128;
         match sqrt * sqrt == n {
             true => 1,
             false => 2,
@@ -406,10 +310,10 @@ fn count(mut n: u64) -> u64 {
     }
 }
 
-fn two(n: u64) -> Vec<u64> {
+fn two(n: u128) -> Vec<u128> {
     let factors = prime_factors(n);
     let mut m = 1;
-    let mut l: Vec<u64> = vec![];
+    let mut l: Vec<u128> = vec![];
 
     for i in factors.keys() {
         m *= pow(*i, factors[i] / 2);
@@ -419,11 +323,11 @@ fn two(n: u64) -> Vec<u64> {
         }
     }
 
-    let mut ans: Vec<u64> = vec![1, 0];
+    let mut ans: Vec<u128> = vec![1, 0];
 
     for i in l.iter() {
         let k = cornacchia(*i);
-        let res = [k, ((i - k * k) as f64).sqrt() as u64];
+        let res = [k, ((i - k * k) as f64).sqrt() as u128];
         ans = multiply_pairs(ans, Vec::from(res));
     }
 
@@ -433,7 +337,7 @@ fn two(n: u64) -> Vec<u64> {
     ans
 }
 
-fn three(n: u64) -> Vec<u64> {
+fn three(n: u128) -> Vec<u128> {
     let factors = prime_factors(n);
     let mut m = 1;
     let mut k = 1;
@@ -457,7 +361,7 @@ fn three(n: u64) -> Vec<u64> {
     ans
 }
 
-fn four(mut n: u64) -> Vec<u64> {
+fn four(mut n: u128) -> Vec<u128> {
     let mut ct = 0;
 
     while n % 4 == 0 {
@@ -465,7 +369,7 @@ fn four(mut n: u64) -> Vec<u64> {
         n /= 4;
     }
 
-    let mut ans: Vec<u64> = three(n - 1);
+    let mut ans: Vec<u128> = three(n - 1);
     let pow_ct = pow(2, ct);
     ans = Vec::from([ans[0] * pow_ct, ans[1] * pow_ct, ans[2] * pow_ct]);
     ans.push(pow_ct);
@@ -479,7 +383,7 @@ fn main() -> Result<()> {
 
     let mut input = String::new();
     stdin().read_line(&mut input)?;
-    let n: u64 = input.trim().parse::<u64>().unwrap();
+    let n: u128 = input.trim().parse::<u128>().unwrap();
 
     let tmp = n;
     let ch = count(n);
@@ -487,7 +391,7 @@ fn main() -> Result<()> {
     writeln!(stdout(), "{}", ch)?;
 
     if ch == 1 {
-        writeln!(stdout(), "{}", (tmp as f64).sqrt() as u64)?
+        writeln!(stdout(), "{}", (tmp as f64).sqrt() as u128)?
     } else if ch == 2 {
         let ans = two(tmp);
         writeln!(stdout(), "{} {}", ans[0], ans[1])?
