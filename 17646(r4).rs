@@ -1,64 +1,11 @@
-// 아니 u128, i128이 있는지 몰랐지!!!
-// 그런데도 아직 런타임 에러?
+// u128, i128의 존재를 몰랐음
+// random을 보통 시간을 많이 활용해서 하는데 이게 런타임 에러의 원인이 되었어서 외부에서 랜덤을 끌어서 써야함
 
 use std::collections::HashMap;
 use std::io::{Result, Write, stdin, stdout};
-use std::time::{SystemTime, UNIX_EPOCH};
 
-struct RandGenerator(u128);
-
-impl From<u128> for RandGenerator {
-    fn from(seed: u128) -> Self {
-        RandGenerator(seed)
-    }
-}
-
-impl RandGenerator {
-    fn new() -> Self {
-        let seed = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("can't get current time")
-            .as_nanos();
-
-        RandGenerator(seed)
-    }
-
-    fn next(&mut self) -> u128 {
-        let mut x = self.0;
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
-        self.0 = x;
-        x
-    }
-
-    fn randint(&mut self, min: u32, max: u32) -> u32 {
-        if min > max {
-            panic!("min must be less than max");
-        }
-
-        let range = (max - min + 1) as u128;
-        let random_value = self.next() % range;
-
-        min + random_value as u32
-    }
-}
-
-static mut RNG: RandGenerator = RandGenerator(0);
-
-#[allow(static_mut_refs)]
-fn randint(min: u128, max: u128) -> u128 {
-    unsafe {
-        let min_high = (min >> 32) as u32;
-        let min_low = (min & 0x00000000FFFFFFFF) as u32;
-        let max_high = (max >> 32) as u32;
-        let max_low = (max & 0x00000000FFFFFFFF) as u32;
-
-        let high = RNG.randint(min_high, max_high) as u128;
-        let low = RNG.randint(min_low, max_low) as u128;
-
-        (high << 32) | low
-    }
+extern "C" {
+    fn rand() -> u64;
 }
 
 fn mod_pow(mut base: u128, mut exp: u128, modulus: u128) -> u128 {
@@ -78,7 +25,6 @@ fn pow(base: u128, exp: u128) -> u128 {
     mod_pow(base, exp, u128::MAX)
 }
 
-
 fn is_prime(n: u128) -> bool {
     let pil = vec![2, 3, 5, 7, 11, 13, 17, 19, 23];
 
@@ -91,14 +37,14 @@ fn is_prime(n: u128) -> bool {
     }
 
     for a in &pil {
-        if !millar_rabin(n, *a) {
+        if !miller_rabin(n, *a) {
             return false;
         }
     }
     true
 }
 
-fn millar_rabin(n: u128, k: u128) -> bool {
+fn miller_rabin(n: u128, k: u128) -> bool {
     if n == 2 {
         return true;
     }
@@ -108,7 +54,7 @@ fn millar_rabin(n: u128, k: u128) -> bool {
     }
 
     let mut s: u128 = 0;
-    let mut d = n - 1;
+    let mut d: u128 = n - 1;
 
     while d % 2 == 0 {
         s += 1;
@@ -116,7 +62,7 @@ fn millar_rabin(n: u128, k: u128) -> bool {
     }
 
     for _ in 0..k {
-        let a = randint(2, n - 1);
+        let a = unsafe { rand() as u128 % (n - 2) + 1 };
         let mut x = mod_pow(a, d, n);
 
         if x == 1 || x == n - 1 {
@@ -159,9 +105,9 @@ fn pollard_rho(n: u128) -> u128 {
         return 1;
     }
 
-    let mut x: u128 = randint(1, n - 1);
+    let mut x: u128 = unsafe { rand() as u128 % (n - 1) + 1 };
     let mut y: u128 = x;
-    let c: u128 = randint(1, n - 1);
+    let c: u128 = unsafe { rand() as u128 % (n - 1) + 1 };
     let mut g: u128 = 1;
 
     while g == 1 {
@@ -214,7 +160,7 @@ fn tonelli_shanks(n: u128, p: u128) -> Option<u128> {
     }
 
     if s == 1 {
-        mod_pow(n, (p + 1) / 4, p);
+        return Some(mod_pow(n, (p + 1) / 4, p));
     }
 
     let mut z = 2;
@@ -379,8 +325,6 @@ fn four(mut n: u128) -> Vec<u128> {
 }
 
 fn main() -> Result<()> {
-    unsafe { RNG = RandGenerator::new() };
-
     let mut input = String::new();
     stdin().read_line(&mut input)?;
     let n: u128 = input.trim().parse::<u128>().unwrap();
